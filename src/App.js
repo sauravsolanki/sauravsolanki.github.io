@@ -98,7 +98,7 @@ class App extends Component {
               left: 250,
               width: '89.2%',
               height: '70px'
-            }}>IHMS ©2021 Made with ❤️ by Saurav Solanki </Footer>
+            }}>Made with ❤️ by Saurav Solanki © 2021 </Footer>
 
           </Content>
 
