@@ -1,4 +1,4 @@
-const { withContentlayer } = require('next-contentlayer2')
+const { withContentlayer } = require('next-contentlayer')
 
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
@@ -65,7 +65,7 @@ module.exports = () => {
     eslint: {
       dirs: ['app', 'components', 'layouts', 'scripts'],
     },
-    basePath: "/sauravsolanki.github.io",
+    basePath: '/sauravsolanki.github.io',
     output: 'export',
     images: {
       remotePatterns: [
