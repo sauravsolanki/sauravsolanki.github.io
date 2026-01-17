@@ -5,6 +5,13 @@ import { genPageMetadata } from 'app/seo'
 export const metadata = genPageMetadata({ title: 'Projects' })
 
 export default function Projects() {
+  // Sort to show highlighted projects first
+  const sortedProjects = [...projectsData].sort((a, b) => {
+    if (a.highlight && !b.highlight) return -1
+    if (!a.highlight && b.highlight) return 1
+    return 0
+  })
+
   return (
     <>
       <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -12,17 +19,27 @@ export default function Projects() {
           <h1 className="text-3xl font-extrabold leading-9 tracking-tight text-gray-900 dark:text-gray-100 sm:text-4xl sm:leading-10 md:text-6xl md:leading-14">
             Projects
           </h1>
+          <p className="text-lg leading-7 text-gray-500 dark:text-gray-400">
+            Production ML systems, research projects, and open-source contributions showcasing expertise in NLP, Computer Vision, MLOps, and Edge AI.
+          </p>
         </div>
         <div className="container py-12">
           <div className="-m-4 flex flex-wrap">
-            {projectsData.map((d) => (
-              <Card
+            {sortedProjects.map((d, index) => (
+              <div
                 key={d.title}
-                title={d.title}
-                description={d.description}
-                imgSrc={d.imgSrc}
-                href={d.href}
-              />
+                className="animate-fadeInUp"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <Card
+                  title={d.title}
+                  description={d.description}
+                  imgSrc={d.imgSrc}
+                  href={d.href}
+                  tags={d.tags}
+                  highlight={d.highlight}
+                />
+              </div>
             ))}
           </div>
         </div>

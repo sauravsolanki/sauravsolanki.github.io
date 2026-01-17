@@ -1,0 +1,396 @@
+---
+title: 'Edge AI & Model Optimization: From Cloud to Device'
+date: '2023-01-20'
+tags: ['edge-ai', 'tensorrt', 'quantization', 'model-optimization', 'mlops']
+draft: false
+summary: Improving edge inference speed by 25-30% via quantization (QAT, TFLite, TensorRT, OpenVINO) and pruning. Building DeepOps for real-time edge device management reducing model management time by 80%.
+images: ['/static/images/edge-ai.png']
+authors: ['default']
+---
+
+# Edge AI & Model Optimization: From Cloud to Device
+
+_Author_: Saurav Solanki | _Role_: Software Engineer, ML at DeepEdge.ai
+
+---
+
+## The Edge AI Challenge
+
+At **DeepEdge.ai**, we built an EdgeAI/MLOps platform that helps enterprises deploy ML models on edge devices. The fundamental challenge? **Models trained in the cloud don't just work on edge devices.**
+
+Edge constraints include:
+- **Limited compute**: ARM CPUs, small GPUs, or NPUs
+- **Memory constraints**: Often < 4GB RAM
+- **Power limitations**: Battery-powered devices
+- **Latency requirements**: Real-time inference (< 50ms)
+- **No cloud connectivity**: Offline operation required
+
+## Model Optimization Techniques
+
+### 1. Quantization
+
+Quantization reduces model precision from FP32 to INT8, cutting model size by 4x and accelerating inference.
+
+#### Post-Training Quantization (PTQ)
+
+```python
+import tensorflow as tf
+
+def quantize_model_ptq(saved_model_path, representative_dataset):
+    """Post-training quantization with TFLite"""
+    converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_path)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_dataset
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8
+    converter.inference_output_type = tf.int8
+
+    quantized_model = converter.convert()
+
+    with open('model_quantized.tflite', 'wb') as f:
+        f.write(quantized_model)
+
+    return quantized_model
+
+def representative_dataset_gen():
+    """Generate calibration data for quantization"""
+    for sample in calibration_data[:100]:
+        yield [sample.astype(np.float32)]
+```
+
+#### Quantization-Aware Training (QAT)
+
+QAT maintains higher accuracy by simulating quantization during training:
+
+```python
+import tensorflow_model_optimization as tfmot
+
+def apply_qat(model):
+    """Apply quantization-aware training"""
+    quantize_model = tfmot.quantization.keras.quantize_model
+
+    # Clone and apply quantization
+    qat_model = quantize_model(model)
+
+    # Compile with same settings
+    qat_model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
+    # Fine-tune with quantization awareness
+    qat_model.fit(
+        train_data,
+        epochs=10,
+        validation_data=val_data
+    )
+
+    return qat_model
+```
+
+### 2. TensorRT Optimization
+
+For NVIDIA edge devices (Jetson), TensorRT provides maximum performance:
+
+```python
+import tensorrt as trt
+import pycuda.driver as cuda
+
+class TensorRTInference:
+    def __init__(self, engine_path):
+        self.logger = trt.Logger(trt.Logger.WARNING)
+        self.runtime = trt.Runtime(self.logger)
+
+        with open(engine_path, 'rb') as f:
+            self.engine = self.runtime.deserialize_cuda_engine(f.read())
+
+        self.context = self.engine.create_execution_context()
+        self._allocate_buffers()
+
+    def _allocate_buffers(self):
+        """Allocate GPU memory for inputs/outputs"""
+        self.inputs = []
+        self.outputs = []
+        self.bindings = []
+
+        for binding in self.engine:
+            size = trt.volume(self.engine.get_binding_shape(binding))
+            dtype = trt.nptype(self.engine.get_binding_dtype(binding))
+
+            # Allocate host and device buffers
+            host_mem = cuda.pagelocked_empty(size, dtype)
+            device_mem = cuda.mem_alloc(host_mem.nbytes)
+
+            self.bindings.append(int(device_mem))
+
+            if self.engine.binding_is_input(binding):
+                self.inputs.append({'host': host_mem, 'device': device_mem})
+            else:
+                self.outputs.append({'host': host_mem, 'device': device_mem})
+
+    def infer(self, input_data):
+        """Run inference with TensorRT"""
+        # Copy input to device
+        np.copyto(self.inputs[0]['host'], input_data.ravel())
+        cuda.memcpy_htod(self.inputs[0]['device'], self.inputs[0]['host'])
+
+        # Execute
+        self.context.execute_v2(bindings=self.bindings)
+
+        # Copy output from device
+        cuda.memcpy_dtoh(self.outputs[0]['host'], self.outputs[0]['device'])
+
+        return self.outputs[0]['host']
+```
+
+### 3. OpenVINO for Intel Devices
+
+For Intel-based edge hardware:
+
+```python
+from openvino.runtime import Core
+
+class OpenVINOInference:
+    def __init__(self, model_path):
+        self.core = Core()
+        self.model = self.core.read_model(model_path)
+
+        # Optimize for specific device
+        self.compiled_model = self.core.compile_model(
+            self.model,
+            device_name="CPU",
+            config={"PERFORMANCE_HINT": "LATENCY"}
+        )
+
+        self.infer_request = self.compiled_model.create_infer_request()
+
+    def infer(self, input_data):
+        """Run inference with OpenVINO"""
+        self.infer_request.infer(inputs={0: input_data})
+        return self.infer_request.get_output_tensor(0).data
+```
+
+### 4. Model Pruning
+
+Remove redundant weights to reduce model size:
+
+```python
+import tensorflow_model_optimization as tfmot
+
+def apply_pruning(model, target_sparsity=0.5):
+    """Apply structured pruning to model"""
+    prune_low_magnitude = tfmot.sparsity.keras.prune_low_magnitude
+
+    pruning_params = {
+        'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(
+            initial_sparsity=0.0,
+            final_sparsity=target_sparsity,
+            begin_step=0,
+            end_step=1000
+        )
+    }
+
+    pruned_model = prune_low_magnitude(model, **pruning_params)
+
+    # Fine-tune pruned model
+    pruned_model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
+    callbacks = [tfmot.sparsity.keras.UpdatePruningStep()]
+    pruned_model.fit(train_data, epochs=5, callbacks=callbacks)
+
+    # Strip pruning wrappers for deployment
+    final_model = tfmot.sparsity.keras.strip_pruning(pruned_model)
+
+    return final_model
+```
+
+## DeepOps: Edge Device Management Platform
+
+Managing hundreds of edge devices running ML models is complex. We built **DeepOps** to handle:
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      DeepOps Architecture                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    DeepOps Dashboard                     │    │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐   │    │
+│  │  │ Devices │  │ Models  │  │  Jobs   │  │ Alerts  │   │    │
+│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘   │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    DeepOps Backend                       │    │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │    │
+│  │  │   FastAPI   │  │   Redis     │  │   MongoDB   │     │    │
+│  │  │   Server    │  │   Queue     │  │   Store     │     │    │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘     │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              │                                   │
+│                    ┌─────────┴─────────┐                        │
+│                    │      MQTT         │                        │
+│                    │    Broker         │                        │
+│                    └─────────┬─────────┘                        │
+│         ┌──────────────┬─────┴─────┬──────────────┐             │
+│         ▼              ▼           ▼              ▼             │
+│    ┌─────────┐   ┌─────────┐  ┌─────────┐   ┌─────────┐        │
+│    │ Jetson  │   │ RPi 4   │  │ Intel   │   │ Coral   │        │
+│    │ Nano    │   │         │  │ NUC     │   │ TPU     │        │
+│    └─────────┘   └─────────┘  └─────────┘   └─────────┘        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+#### Device Provisioning
+
+```python
+from fastapi import FastAPI, BackgroundTasks
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class DeviceRegistration(BaseModel):
+    device_id: str
+    device_type: str  # jetson, rpi, intel
+    capabilities: dict
+
+@app.post("/devices/register")
+async def register_device(device: DeviceRegistration, background_tasks: BackgroundTasks):
+    """Register new edge device"""
+    # Validate device
+    await validate_device_capabilities(device)
+
+    # Store in database
+    await db.devices.insert_one(device.dict())
+
+    # Initialize monitoring
+    background_tasks.add_task(setup_device_monitoring, device.device_id)
+
+    # Provision default model
+    background_tasks.add_task(deploy_model, device.device_id, "default-model")
+
+    return {"status": "registered", "device_id": device.device_id}
+```
+
+#### Over-the-Air Model Updates
+
+```python
+class ModelDeployer:
+    def __init__(self, mqtt_client):
+        self.mqtt = mqtt_client
+
+    async def deploy_model(self, device_id: str, model_id: str):
+        """Deploy model to edge device"""
+        # Get device info
+        device = await db.devices.find_one({"device_id": device_id})
+
+        # Get optimized model for device type
+        model_artifact = await get_optimized_model(
+            model_id=model_id,
+            device_type=device["device_type"]
+        )
+
+        # Create deployment job
+        job = {
+            "job_id": str(uuid4()),
+            "type": "model_deploy",
+            "model_url": model_artifact["url"],
+            "model_hash": model_artifact["hash"],
+            "rollback_model": device.get("current_model")
+        }
+
+        # Send to device via MQTT
+        self.mqtt.publish(
+            topic=f"devices/{device_id}/commands",
+            payload=json.dumps(job)
+        )
+
+        return job["job_id"]
+```
+
+#### Health Monitoring
+
+```python
+class DeviceMonitor:
+    def __init__(self):
+        self.alerts = AlertManager()
+
+    async def process_telemetry(self, device_id: str, telemetry: dict):
+        """Process device health telemetry"""
+        # Store metrics
+        await timeseries_db.write(
+            measurement="device_metrics",
+            tags={"device_id": device_id},
+            fields={
+                "cpu_usage": telemetry["cpu"],
+                "memory_usage": telemetry["memory"],
+                "gpu_usage": telemetry.get("gpu", 0),
+                "inference_latency": telemetry["latency_ms"],
+                "temperature": telemetry["temp_celsius"]
+            }
+        )
+
+        # Check thresholds
+        if telemetry["temp_celsius"] > 80:
+            await self.alerts.send(
+                severity="warning",
+                device_id=device_id,
+                message=f"High temperature: {telemetry['temp_celsius']}°C"
+            )
+
+        if telemetry["latency_ms"] > 100:
+            await self.alerts.send(
+                severity="warning",
+                device_id=device_id,
+                message=f"Inference latency spike: {telemetry['latency_ms']}ms"
+            )
+```
+
+## Results
+
+### Model Optimization Results
+
+| Optimization | Model Size | Latency | Accuracy |
+|-------------|-----------|---------|----------|
+| Baseline (FP32) | 100 MB | 150ms | 92.0% |
+| PTQ (INT8) | 25 MB | 85ms | 90.5% |
+| QAT (INT8) | 25 MB | 85ms | 91.5% |
+| TensorRT FP16 | 50 MB | 45ms | 91.8% |
+| TensorRT INT8 | 25 MB | 32ms | 91.0% |
+| Pruned + Quantized | 15 MB | 40ms | 90.0% |
+
+### Platform Impact
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Model deployment time | 4 hours | 10 min | **96% faster** |
+| Device onboarding | 2 days | 30 min | **98% faster** |
+| Model management time | 5 hrs/week | 1 hr/week | **80% reduction** |
+| AWS infrastructure cost | $50K/month | $35K/month | **30% savings** |
+
+## Key Learnings
+
+1. **Quantization is free performance**: With proper calibration, INT8 quantization gives 2-4x speedup with minimal accuracy loss
+
+2. **Device-specific optimization matters**: The same model needs different optimizations for Jetson vs Raspberry Pi vs Intel
+
+3. **OTA updates are critical**: Edge devices need reliable, rollback-capable update mechanisms
+
+4. **Monitoring prevents outages**: Proactive health monitoring catches issues before users notice
+
+5. **Edge != Cloud**: Design for disconnected operation, limited resources, and real-time constraints
+
+---
+
+This work enabled DeepEdge.ai customers to deploy production ML at the edge, powering use cases from industrial inspection to retail analytics.

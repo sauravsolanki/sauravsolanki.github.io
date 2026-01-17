@@ -1,9 +1,9 @@
 /** @type {import("pliny/config").PlinyConfig } */
 const siteMetadata = {
-  title: 'Saurav Solanki',
+  title: 'Saurav Solanki | Senior ML Engineer',
   author: 'Saurav Solanki',
   headerTitle: 'Saurav Solanki',
-  description: "A Coder's Dairy",
+  description: 'Senior ML Engineer with 5+ years experience in NLP, MLOps, Computer Vision, and Edge AI. Building production ML systems at SumoLogic.',
   language: 'en-us',
   theme: 'dark', // system, dark or light
   siteUrl: 'https://sauravsolanki.github.io',

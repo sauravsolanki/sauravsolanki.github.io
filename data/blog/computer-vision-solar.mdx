@@ -1,0 +1,409 @@
+---
+title: 'Computer Vision for Solar Construction Monitoring'
+date: '2024-03-10'
+tags: ['computer-vision', 'yolov8', 'sam', 'transformers', 'fastapi', 'airflow']
+draft: false
+summary: Reduced weekly construction site reports time by 70% using ML models (YOLOv8, UNet, SAM, Transformers) for materials detection. Built event-driven integration handling 1000+ concurrent jobs.
+images: ['/static/images/solar-cv.png']
+authors: ['default']
+---
+
+# Computer Vision for Solar Construction Monitoring
+
+_Author_: Saurav Solanki | _Role_: Software Engineer, ML at Sensehawk (Reliance Jio subsidiary)
+
+---
+
+## The Challenge
+
+**Sensehawk** provides a solar digitization platform that helps solar companies manage construction of large-scale solar farms. A typical utility-scale solar project involves:
+
+- **500,000+ solar panels** across hundreds of acres
+- **Weekly progress reports** tracking installation status
+- **Quality inspections** identifying defects and misalignments
+- **Material tracking** for panels, mounting structures, cables
+
+Previously, site engineers manually reviewed drone imagery and satellite photos to create these reports — a process taking **40+ hours per week** for large projects.
+
+## Solution: Automated Visual Intelligence
+
+We built an ML-powered system that automatically:
+1. **Detects and counts** solar panels, mounting structures, and equipment
+2. **Tracks installation progress** over time
+3. **Identifies defects** like misaligned panels or damaged cells
+4. **Generates reports** with minimal human intervention
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│               Solar CV Pipeline Architecture                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    Data Ingestion                        │    │
+│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐           │    │
+│  │  │  Drone    │  │ Satellite │  │  Mobile   │           │    │
+│  │  │  Images   │  │  Imagery  │  │  Photos   │           │    │
+│  │  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘           │    │
+│  │        └──────────────┼──────────────┘                  │    │
+│  │                       ▼                                  │    │
+│  │              ┌─────────────────┐                        │    │
+│  │              │   AWS S3 Lake   │                        │    │
+│  │              └────────┬────────┘                        │    │
+│  └───────────────────────┼──────────────────────────────────┘   │
+│                          ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                  Processing Pipeline                     │    │
+│  │  ┌─────────────────────────────────────────────────┐    │    │
+│  │  │              Apache Airflow DAGs                 │    │    │
+│  │  │  ┌─────────┐  ┌─────────┐  ┌─────────┐         │    │    │
+│  │  │  │Preproc. │─▶│Detection│─▶│Postproc │         │    │    │
+│  │  │  └─────────┘  └─────────┘  └─────────┘         │    │    │
+│  │  └─────────────────────────────────────────────────┘    │    │
+│  │                          │                               │    │
+│  │         ┌────────────────┼────────────────┐             │    │
+│  │         ▼                ▼                ▼             │    │
+│  │  ┌───────────┐    ┌───────────┐    ┌───────────┐       │    │
+│  │  │  YOLOv8   │    │   UNet    │    │    SAM    │       │    │
+│  │  │  Detect   │    │  Segment  │    │  Segment  │       │    │
+│  │  └───────────┘    └───────────┘    └───────────┘       │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                          │                                       │
+│                          ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                   Report Generation                      │    │
+│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐           │    │
+│  │  │  Progress │  │  Quality  │  │   Asset   │           │    │
+│  │  │  Reports  │  │  Reports  │  │  Counts   │           │    │
+│  │  └───────────┘  └───────────┘  └───────────┘           │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Detection Models
+
+### YOLOv8 for Object Detection
+
+We trained YOLOv8 to detect various construction elements:
+
+```python
+from ultralytics import YOLO
+import cv2
+
+class SolarDetector:
+    CLASSES = [
+        "solar_panel", "mounting_structure", "inverter",
+        "transformer", "cable_tray", "junction_box",
+        "worker", "vehicle", "crane"
+    ]
+
+    def __init__(self, model_path):
+        self.model = YOLO(model_path)
+
+    def detect(self, image_path, conf_threshold=0.5):
+        """Detect objects in aerial imagery"""
+        results = self.model(
+            image_path,
+            conf=conf_threshold,
+            iou=0.45,
+            agnostic_nms=True
+        )
+
+        detections = []
+        for result in results:
+            boxes = result.boxes
+            for box in boxes:
+                detection = {
+                    "class": self.CLASSES[int(box.cls)],
+                    "confidence": float(box.conf),
+                    "bbox": box.xyxy[0].tolist(),
+                    "area_pixels": self._calculate_area(box.xyxy[0])
+                }
+                detections.append(detection)
+
+        return detections
+
+    def count_assets(self, image_path):
+        """Count each asset type in image"""
+        detections = self.detect(image_path)
+        counts = {}
+        for det in detections:
+            cls = det["class"]
+            counts[cls] = counts.get(cls, 0) + 1
+        return counts
+```
+
+### Training Pipeline
+
+```python
+from ultralytics import YOLO
+import wandb
+
+def train_solar_detector():
+    """Train YOLOv8 on solar construction dataset"""
+    # Initialize W&B for experiment tracking
+    wandb.init(project="solar-detection", name="yolov8-large")
+
+    # Load pretrained model
+    model = YOLO("yolov8l.pt")
+
+    # Train on custom dataset
+    results = model.train(
+        data="solar_dataset.yaml",
+        epochs=100,
+        imgsz=1280,  # High res for aerial images
+        batch=16,
+        device="0,1",  # Multi-GPU
+        augment=True,
+        mosaic=0.5,
+        mixup=0.1,
+        copy_paste=0.1,  # Copy-paste augmentation
+        degrees=15,  # Rotation augmentation
+        scale=0.3,
+
+        # Callbacks
+        project="runs/solar",
+        name="yolov8l-v2",
+        exist_ok=True
+    )
+
+    # Log metrics
+    wandb.log({
+        "mAP50": results.results_dict["metrics/mAP50(B)"],
+        "mAP50-95": results.results_dict["metrics/mAP50-95(B)"],
+        "precision": results.results_dict["metrics/precision(B)"],
+        "recall": results.results_dict["metrics/recall(B)"]
+    })
+
+    return model
+```
+
+### Segment Anything (SAM) for Precise Segmentation
+
+For accurate panel counting and defect detection, we use SAM:
+
+```python
+from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+
+class PanelSegmenter:
+    def __init__(self):
+        sam = sam_model_registry["vit_h"](checkpoint="sam_vit_h.pth")
+        sam.to(device="cuda")
+
+        self.mask_generator = SamAutomaticMaskGenerator(
+            model=sam,
+            points_per_side=32,
+            pred_iou_thresh=0.86,
+            stability_score_thresh=0.92,
+            min_mask_region_area=1000,  # Filter small regions
+        )
+
+    def segment_panels(self, image):
+        """Generate precise panel masks"""
+        masks = self.mask_generator.generate(image)
+
+        # Filter to keep only panel-like masks
+        panel_masks = []
+        for mask in masks:
+            # Panels are rectangular with specific aspect ratios
+            if self._is_panel_shaped(mask):
+                panel_masks.append({
+                    "mask": mask["segmentation"],
+                    "area": mask["area"],
+                    "bbox": mask["bbox"],
+                    "stability_score": mask["stability_score"]
+                })
+
+        return panel_masks
+
+    def _is_panel_shaped(self, mask):
+        """Filter masks that match solar panel geometry"""
+        bbox = mask["bbox"]
+        width = bbox[2]
+        height = bbox[3]
+
+        # Solar panels have specific aspect ratios
+        aspect_ratio = max(width, height) / min(width, height)
+
+        # Typical panel ratios: 1.5-2.0 for standard, ~1.0 for square
+        return 1.0 <= aspect_ratio <= 2.5 and mask["area"] > 5000
+```
+
+### UNet for Semantic Segmentation
+
+For large-scale area analysis:
+
+```python
+import torch
+import torch.nn as nn
+import segmentation_models_pytorch as smp
+
+class SolarSegmentationModel:
+    def __init__(self):
+        self.model = smp.Unet(
+            encoder_name="efficientnet-b4",
+            encoder_weights="imagenet",
+            in_channels=3,
+            classes=5,  # background, panel, structure, vegetation, building
+        )
+        self.model.load_state_dict(torch.load("solar_unet.pth"))
+        self.model.eval()
+        self.model.cuda()
+
+    def segment(self, image):
+        """Segment aerial image into land use categories"""
+        # Preprocess
+        tensor = self._preprocess(image)
+
+        # Inference
+        with torch.no_grad():
+            logits = self.model(tensor)
+            predictions = torch.argmax(logits, dim=1)
+
+        return predictions.cpu().numpy()
+
+    def calculate_coverage(self, image):
+        """Calculate installation progress percentage"""
+        segmentation = self.segment(image)
+
+        total_pixels = segmentation.size
+        panel_pixels = (segmentation == 1).sum()  # Class 1 = panels
+        structure_pixels = (segmentation == 2).sum()  # Class 2 = structures
+
+        return {
+            "panel_coverage": panel_pixels / total_pixels * 100,
+            "structure_coverage": structure_pixels / total_pixels * 100,
+            "total_installed": (panel_pixels + structure_pixels) / total_pixels * 100
+        }
+```
+
+## Event-Driven Integration Platform
+
+To handle data from multiple sources (Microsoft Graph, AutoCAD, etc.), we built an event-driven microservice:
+
+```python
+from fastapi import FastAPI, BackgroundTasks
+from celery import Celery
+import boto3
+
+app = FastAPI()
+celery_app = Celery("solar_integration", broker="sqs://")
+
+class IntegrationService:
+    def __init__(self):
+        self.s3 = boto3.client("s3")
+        self.sqs = boto3.client("sqs")
+
+    @app.post("/integrations/microsoft-graph/webhook")
+    async def handle_graph_webhook(self, payload: dict, background_tasks: BackgroundTasks):
+        """Handle Microsoft Graph notifications for new files"""
+        resource = payload.get("resource")
+
+        if self._is_aerial_image(resource):
+            # Queue for processing
+            background_tasks.add_task(
+                self._queue_processing,
+                source="microsoft_graph",
+                resource_id=resource["id"]
+            )
+
+        return {"status": "accepted"}
+
+    @celery_app.task(bind=True, max_retries=3)
+    def process_aerial_image(self, image_url: str, project_id: str):
+        """Process aerial image through ML pipeline"""
+        try:
+            # Download image
+            image_path = self._download_image(image_url)
+
+            # Run detection pipeline
+            detections = solar_detector.detect(image_path)
+            segmentation = panel_segmenter.segment_panels(image_path)
+
+            # Store results
+            results = {
+                "project_id": project_id,
+                "image_url": image_url,
+                "asset_counts": self._aggregate_counts(detections),
+                "coverage": self._calculate_coverage(segmentation),
+                "defects": self._detect_defects(segmentation),
+                "processed_at": datetime.utcnow().isoformat()
+            }
+
+            # Save to database
+            self._save_results(results)
+
+            # Trigger report generation if needed
+            if self._should_generate_report(project_id):
+                generate_weekly_report.delay(project_id)
+
+        except Exception as e:
+            self.retry(exc=e, countdown=60)
+```
+
+### Handling 1000+ Concurrent Jobs
+
+```python
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.amazon.aws.operators.sqs import SqsSensor
+
+with DAG(
+    "solar_image_processing",
+    schedule_interval=None,  # Triggered by events
+    max_active_runs=50,  # Limit concurrent DAG runs
+) as dag:
+
+    wait_for_image = SqsSensor(
+        task_id="wait_for_image",
+        sqs_queue="solar-images-queue",
+        max_messages=10,  # Batch processing
+    )
+
+    process_images = PythonOperator.partial(
+        task_id="process_images",
+        python_callable=process_image_batch,
+        pool="gpu_workers",  # Dedicated GPU pool
+    ).expand(image_batch=wait_for_image.output)
+
+    aggregate_results = PythonOperator(
+        task_id="aggregate_results",
+        python_callable=aggregate_detection_results,
+        trigger_rule="all_done",
+    )
+
+    wait_for_image >> process_images >> aggregate_results
+```
+
+## Results
+
+### Detection Performance
+
+| Model | mAP@50 | mAP@50-95 | Inference Time |
+|-------|--------|-----------|----------------|
+| YOLOv8-L | 0.94 | 0.78 | 45ms |
+| UNet-EffNet | 0.91 | 0.72 | 120ms |
+| SAM | 0.96 | 0.82 | 850ms |
+
+### Business Impact
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Weekly report time | 40 hours | 12 hours | **70% reduction** |
+| Asset counting accuracy | 85% | 97% | **+14%** |
+| Defect detection rate | 60% | 92% | **+53%** |
+| Processing capacity | 100 images/day | 5000 images/day | **50x increase** |
+
+## Key Technical Decisions
+
+1. **YOLOv8 over Faster R-CNN**: Better speed-accuracy tradeoff for real-time processing
+2. **SAM for precision tasks**: When exact boundaries matter (defect detection)
+3. **Event-driven architecture**: Scales naturally with data volume
+4. **Airflow for orchestration**: Handles complex dependencies and retries
+5. **Multi-model ensemble**: Different models for different sub-tasks
+
+---
+
+This system now processes aerial imagery from **200+ solar projects** worldwide, enabling construction teams to focus on building rather than paperwork.

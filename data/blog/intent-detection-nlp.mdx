@@ -1,0 +1,312 @@
+---
+title: 'Intent Detection & Query AutoComplete at Scale'
+date: '2024-12-10'
+tags: ['nlp', 'gpt-2', 'transformers', 'production-ml', 'deep-learning']
+draft: false
+summary: Building real-time intent recognition achieving <500ms latency with 70% accuracy improvement, and implementing Query AutoComplete using Ghosting approach with N-gram models and fine-tuned GPT-2.
+images: ['/static/images/intent-detection.png']
+authors: ['default']
+---
+
+# Intent Detection & Query AutoComplete at Scale
+
+_Author_: Saurav Solanki | _Role_: Senior Software Engineer I, ML at SumoLogic
+
+---
+
+## Context
+
+At **SumoLogic**, a leading log management and analytics platform, users write complex queries to search through petabytes of log data. The challenge? Users often don't know the exact query syntax, leading to:
+
+- Slow query formulation
+- Syntax errors
+- Suboptimal search patterns
+- Frustrated users
+
+We set out to build an intelligent query assistance system with two core components:
+1. **Intent Detection**: Understand what the user is trying to achieve
+2. **Query AutoComplete**: Suggest the next tokens/phrases as users type
+
+## Intent Detection System
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Intent Detection Pipeline                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  User Query  ──▶  Preprocessing  ──▶  Feature Extraction       │
+│                        │                      │                  │
+│                        ▼                      ▼                  │
+│              ┌─────────────────┐    ┌─────────────────┐         │
+│              │   Text Cleaning │    │  TF-IDF + BERT  │         │
+│              │   Tokenization  │    │   Embeddings    │         │
+│              └─────────────────┘    └─────────────────┘         │
+│                                            │                     │
+│                                            ▼                     │
+│                              ┌─────────────────────────┐        │
+│                              │   Ensemble Classifier   │        │
+│                              │  (BERT + LightGBM)      │        │
+│                              └─────────────────────────┘        │
+│                                            │                     │
+│                                            ▼                     │
+│                              ┌─────────────────────────┐        │
+│                              │   Intent + Confidence   │        │
+│                              │   < 500ms latency       │        │
+│                              └─────────────────────────┘        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Intent Categories
+
+We identified **12 primary intent categories** for log queries:
+
+```python
+INTENT_CATEGORIES = {
+    "error_search": "Finding error logs and exceptions",
+    "performance_analysis": "Latency, response time analysis",
+    "security_audit": "Authentication, access logs",
+    "aggregation": "Count, sum, average operations",
+    "time_series": "Trend analysis over time",
+    "filtering": "Specific field-based filtering",
+    "comparison": "Compare across services/time",
+    "anomaly_detection": "Unusual patterns",
+    "debugging": "Trace and debug workflows",
+    "compliance": "Audit and compliance queries",
+    "capacity_planning": "Resource utilization",
+    "alerting": "Threshold-based monitoring"
+}
+```
+
+### Model Training
+
+We used a hybrid approach combining **fine-tuned BERT** with **LightGBM** for robust classification:
+
+```python
+from transformers import BertTokenizer, BertForSequenceClassification
+import lightgbm as lgb
+
+class IntentClassifier:
+    def __init__(self):
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.bert_model = BertForSequenceClassification.from_pretrained(
+            'bert-base-uncased',
+            num_labels=len(INTENT_CATEGORIES)
+        )
+        self.lgb_model = None
+
+    def extract_features(self, query):
+        """Extract both BERT embeddings and handcrafted features"""
+        # BERT embeddings
+        inputs = self.tokenizer(query, return_tensors="pt", truncation=True)
+        with torch.no_grad():
+            bert_features = self.bert_model.bert(**inputs).pooler_output
+
+        # Handcrafted features
+        manual_features = {
+            "has_error_keyword": any(kw in query.lower() for kw in ["error", "exception", "fail"]),
+            "has_aggregation": any(kw in query.lower() for kw in ["count", "sum", "avg"]),
+            "query_length": len(query.split()),
+            "has_time_reference": bool(re.search(r'\d+[hdm]|last|past', query.lower())),
+        }
+
+        return bert_features, manual_features
+
+    def predict(self, query):
+        """Ensemble prediction with confidence score"""
+        bert_probs = self.bert_model(query)
+        lgb_probs = self.lgb_model.predict_proba(features)
+
+        # Weighted ensemble
+        ensemble_probs = 0.7 * bert_probs + 0.3 * lgb_probs
+
+        intent = INTENT_CATEGORIES[ensemble_probs.argmax()]
+        confidence = ensemble_probs.max()
+
+        return intent, confidence
+```
+
+### Latency Optimization
+
+Achieving **<500ms latency** required several optimizations:
+
+1. **Model Quantization**: INT8 quantization reduced inference time by 40%
+2. **ONNX Runtime**: Converted PyTorch models to ONNX for 2x speedup
+3. **Caching**: LRU cache for frequent queries
+4. **Batch Processing**: Dynamic batching for concurrent requests
+
+```python
+import onnxruntime as ort
+
+class OptimizedIntentClassifier:
+    def __init__(self):
+        # Load quantized ONNX model
+        self.session = ort.InferenceSession(
+            "intent_model_quantized.onnx",
+            providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+        )
+        self.cache = LRUCache(maxsize=10000)
+
+    @cached(cache=cache)
+    def predict(self, query):
+        inputs = self.preprocess(query)
+        outputs = self.session.run(None, inputs)
+        return self.postprocess(outputs)
+```
+
+## Query AutoComplete with Ghosting
+
+### The Ghosting Approach
+
+"Ghosting" shows translucent suggestions as users type, similar to GitHub Copilot:
+
+```
+User types:  "error AND service="
+Ghosting:    "error AND service="api-gateway" | timeslice 1h"
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                 (translucent suggestion)
+```
+
+### N-gram Language Model
+
+For fast prefix-based suggestions, we built a custom N-gram model:
+
+```python
+from collections import defaultdict
+import pickle
+
+class NGramModel:
+    def __init__(self, n=3):
+        self.n = n
+        self.ngrams = defaultdict(lambda: defaultdict(int))
+        self.vocab = set()
+
+    def train(self, queries):
+        """Train on historical query corpus"""
+        for query in queries:
+            tokens = self.tokenize(query)
+            self.vocab.update(tokens)
+
+            for i in range(len(tokens) - self.n + 1):
+                context = tuple(tokens[i:i+self.n-1])
+                next_token = tokens[i+self.n-1]
+                self.ngrams[context][next_token] += 1
+
+        # Convert to probabilities
+        for context in self.ngrams:
+            total = sum(self.ngrams[context].values())
+            for token in self.ngrams[context]:
+                self.ngrams[context][token] /= total
+
+    def predict_next(self, context, top_k=5):
+        """Predict next tokens given context"""
+        context_tuple = tuple(context[-(self.n-1):])
+        candidates = self.ngrams.get(context_tuple, {})
+
+        return sorted(candidates.items(), key=lambda x: -x[1])[:top_k]
+```
+
+### Fine-tuned GPT-2 for Complex Suggestions
+
+For longer, context-aware suggestions, we fine-tuned **GPT-2** on our query corpus:
+
+```python
+from transformers import GPT2LMHeadModel, GPT2Tokenizer, Trainer
+
+class QueryGPT2:
+    def __init__(self):
+        self.model = GPT2LMHeadModel.from_pretrained('./query-gpt2-finetuned')
+        self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+    def generate_completion(self, prefix, max_length=50):
+        """Generate query completion"""
+        inputs = self.tokenizer.encode(prefix, return_tensors='pt')
+
+        outputs = self.model.generate(
+            inputs,
+            max_length=max_length,
+            num_return_sequences=3,
+            temperature=0.7,
+            top_p=0.9,
+            do_sample=True,
+            pad_token_id=self.tokenizer.eos_token_id
+        )
+
+        completions = []
+        for output in outputs:
+            completion = self.tokenizer.decode(output, skip_special_tokens=True)
+            completions.append(completion[len(prefix):])
+
+        return completions
+```
+
+### Custom Vocabulary Integration
+
+We augmented GPT-2's vocabulary with domain-specific tokens:
+
+```python
+# Add domain-specific tokens
+special_tokens = {
+    "additional_special_tokens": [
+        "<FIELD>", "<OPERATOR>", "<VALUE>", "<PIPE>",
+        "_sourceCategory", "_sourceHost", "_collector",
+        "timeslice", "count", "sum", "avg", "max", "min"
+    ]
+}
+
+tokenizer.add_special_tokens(special_tokens)
+model.resize_token_embeddings(len(tokenizer))
+```
+
+## Results
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Intent accuracy | 45% | 76% | **+70%** |
+| Intent latency | 1.2s | 480ms | **<500ms achieved** |
+| AutoComplete acceptance | 12% | 34% | **+183%** |
+| Query formulation time | 45s | 18s | **60% faster** |
+
+## Production Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Production Deployment                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────┐                      ┌─────────────┐           │
+│  │   Load      │                      │   Redis     │           │
+│  │   Balancer  │                      │   Cache     │           │
+│  └──────┬──────┘                      └──────┬──────┘           │
+│         │                                    │                   │
+│         ▼                                    │                   │
+│  ┌─────────────────────────────────────────────────────┐        │
+│  │              FastAPI Service Cluster                 │        │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐             │        │
+│  │  │ Pod 1   │  │ Pod 2   │  │ Pod N   │             │        │
+│  │  └─────────┘  └─────────┘  └─────────┘             │        │
+│  └─────────────────────────────────────────────────────┘        │
+│         │                                                        │
+│         ▼                                                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Intent    │  │   N-gram    │  │   GPT-2     │              │
+│  │   Model     │  │   Model     │  │   Service   │              │
+│  │   (ONNX)    │  │   (Memory)  │  │   (GPU)     │              │
+│  └─────────────┘  └─────────────┘  └─────────────┘              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Key Takeaways
+
+1. **Hybrid models work**: Combining transformers with traditional ML yields robust results
+2. **Latency is critical**: Users won't wait—optimize relentlessly
+3. **Domain vocabulary matters**: Fine-tuning on domain data dramatically improves quality
+4. **Cache aggressively**: Query patterns follow power laws—cache the head
+
+---
+
+This system now powers query assistance for thousands of SumoLogic users, helping them find insights in their data faster than ever.

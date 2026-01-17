@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="544" height="306" viewBox="0 0 544 306">
+  <defs>
+    <linearGradient id="bg5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f0f23;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="544" height="306" fill="url(#bg5)"/>
+  <!-- Person silhouette with device -->
+  <circle cx="120" cy="100" r="30" fill="#374151"/>
+  <rect x="90" y="135" width="60" height="80" rx="10" fill="#374151"/>
+  <!-- Camera/glasses -->
+  <rect x="95" y="85" width="50" height="15" rx="3" fill="#4f46e5" stroke="#818cf8" stroke-width="1"/>
+  <!-- Sound waves -->
+  <path d="M180 100 Q200 80 220 100" stroke="#22c55e" stroke-width="2" fill="none" opacity="0.7"/>
+  <path d="M185 100 Q200 85 215 100" stroke="#22c55e" stroke-width="2" fill="none" opacity="0.5"/>
+  <path d="M190 100 Q200 90 210 100" stroke="#22c55e" stroke-width="2" fill="none" opacity="0.3"/>
+  <!-- Feature boxes -->
+  <rect x="260" y="40" width="130" height="55" rx="6" fill="#1e293b" stroke="#ec4899" stroke-width="2"/>
+  <text x="325" y="65" fill="#ec4899" font-family="system-ui" font-size="12" text-anchor="middle" font-weight="bold">Object Detection</text>
+  <text x="325" y="85" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">MobileNet-SSD</text>
+  <rect x="260" y="105" width="130" height="55" rx="6" fill="#1e293b" stroke="#06b6d4" stroke-width="2"/>
+  <text x="325" y="130" fill="#06b6d4" font-family="system-ui" font-size="12" text-anchor="middle" font-weight="bold">Text Recognition</text>
+  <text x="325" y="150" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">OCR + EAST</text>
+  <rect x="260" y="170" width="130" height="55" rx="6" fill="#1e293b" stroke="#f97316" stroke-width="2"/>
+  <text x="325" y="195" fill="#f97316" font-family="system-ui" font-size="12" text-anchor="middle" font-weight="bold">Face Recognition</text>
+  <text x="325" y="215" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">Known Faces DB</text>
+  <!-- Hardware -->
+  <rect x="410" y="50" width="110" height="85" rx="6" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+  <text x="465" y="75" fill="#22c55e" font-family="system-ui" font-size="11" text-anchor="middle" font-weight="bold">Raspberry Pi 4</text>
+  <text x="465" y="95" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">+ Neural Compute</text>
+  <text x="465" y="115" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">Stick 2</text>
+  <text x="465" y="130" fill="#8b5cf6" font-family="monospace" font-size="9" text-anchor="middle">8+ hrs battery</text>
+  <!-- IIT Delhi badge -->
+  <rect x="410" y="150" width="110" height="45" rx="6" fill="#7c3aed" fill-opacity="0.2" stroke="#7c3aed" stroke-width="1"/>
+  <text x="465" y="178" fill="#a78bfa" font-family="system-ui" font-size="12" text-anchor="middle" font-weight="bold">IIT Delhi</text>
+  <!-- Metrics -->
+  <rect x="80" y="230" width="150" height="50" rx="6" fill="#22c55e" fill-opacity="0.1" stroke="#22c55e" stroke-width="1"/>
+  <text x="155" y="252" fill="#22c55e" font-family="monospace" font-size="11" text-anchor="middle">40-70% Faster</text>
+  <text x="155" y="270" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">Processing</text>
+  <rect x="250" y="230" width="130" height="50" rx="6" fill="#ec4899" fill-opacity="0.1" stroke="#ec4899" stroke-width="1"/>
+  <text x="315" y="252" fill="#ec4899" font-family="monospace" font-size="11" text-anchor="middle">Team of 6</text>
+  <text x="315" y="270" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">Research Lead</text>
+  <rect x="400" y="230" width="120" height="50" rx="6" fill="#06b6d4" fill-opacity="0.1" stroke="#06b6d4" stroke-width="1"/>
+  <text x="460" y="252" fill="#06b6d4" font-family="monospace" font-size="11" text-anchor="middle">Social Impact</text>
+  <text x="460" y="270" fill="#94a3b8" font-family="monospace" font-size="9" text-anchor="middle">285M+ Affected</text>
+</svg>

@@ -1,0 +1,212 @@
+---
+title: 'Building an Enterprise MLOps Platform on AWS'
+date: '2024-06-15'
+tags: ['mlops', 'aws', 'kubernetes', 'mlflow', 'sagemaker', 'machine-learning']
+draft: false
+summary: How I designed and deployed an automated MLOps system that reduced ML cycle time by 90%, managing end-to-end model lifecycles including training, versioning, serving, and drift detection.
+images: ['/static/images/mlops-platform.png']
+authors: ['default']
+---
+
+# Building an Enterprise MLOps Platform on AWS
+
+_Author_: Saurav Solanki | _Role_: Software Engineer, ML at Sensehawk
+
+---
+
+## The Challenge
+
+At Sensehawk, a Reliance Jio subsidiary focused on solar digitization, we faced a critical bottleneck: **the ML development cycle was painfully slow**. Data scientists spent more time on infrastructure and deployment than actual model development. Our team needed:
+
+- Reproducible training pipelines
+- Automated model versioning and artifact management
+- Seamless deployment with zero downtime
+- Real-time monitoring for data and model drift
+- A/B testing capabilities for model comparison
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           MLOps Platform Architecture                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
+│  │   Data Lake  │───▶│   Feature    │───▶│   Training   │                  │
+│  │   (S3)       │    │   Store      │    │   Pipeline   │                  │
+│  └──────────────┘    └──────────────┘    └──────────────┘                  │
+│                                                 │                            │
+│                                                 ▼                            │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
+│  │   Model      │◀───│   MLFlow     │◀───│   SageMaker  │                  │
+│  │   Registry   │    │   Tracking   │    │   Training   │                  │
+│  └──────────────┘    └──────────────┘    └──────────────┘                  │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
+│  │   Model      │───▶│   Kubernetes │───▶│   Monitoring │                  │
+│  │   Serving    │    │   (EKS)      │    │   & Alerting │                  │
+│  └──────────────┘    └──────────────┘    └──────────────┘                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Key Components
+
+### 1. Automated Training Pipelines
+
+We built training pipelines using **AWS SageMaker Pipelines** integrated with **Apache Airflow** for orchestration:
+
+```python
+from sagemaker.workflow.pipeline import Pipeline
+from sagemaker.workflow.steps import TrainingStep, ProcessingStep
+
+# Define processing step for data preparation
+processing_step = ProcessingStep(
+    name="DataPreprocessing",
+    processor=sklearn_processor,
+    inputs=[ProcessingInput(source=input_data, destination="/opt/ml/input")],
+    outputs=[ProcessingOutput(output_name="processed", source="/opt/ml/output")],
+    code="preprocessing.py"
+)
+
+# Define training step
+training_step = TrainingStep(
+    name="ModelTraining",
+    estimator=estimator,
+    inputs={"train": processing_step.properties.ProcessingOutputConfig.Outputs["processed"]}
+)
+
+# Create pipeline
+pipeline = Pipeline(
+    name="solar-detection-pipeline",
+    steps=[processing_step, training_step, evaluation_step, register_step],
+    sagemaker_session=sagemaker_session
+)
+```
+
+### 2. Model Versioning with MLFlow
+
+Every experiment is tracked with full lineage:
+
+```python
+import mlflow
+from mlflow.tracking import MlflowClient
+
+mlflow.set_tracking_uri("http://mlflow.internal:5000")
+
+with mlflow.start_run(run_name="yolov8-solar-detection"):
+    # Log parameters
+    mlflow.log_params({
+        "model_type": "yolov8",
+        "epochs": 100,
+        "batch_size": 16,
+        "learning_rate": 0.001
+    })
+
+    # Train model
+    model = train_model(config)
+
+    # Log metrics
+    mlflow.log_metrics({
+        "mAP50": 0.92,
+        "mAP50-95": 0.78,
+        "inference_time_ms": 45
+    })
+
+    # Register model
+    mlflow.pytorch.log_model(
+        model,
+        "model",
+        registered_model_name="solar-panel-detector"
+    )
+```
+
+### 3. Kubernetes-Based Model Serving
+
+Models are deployed on **Amazon EKS** with auto-scaling:
+
+```yaml
+apiVersion: serving.kubeflow.org/v1beta1
+kind: InferenceService
+metadata:
+  name: solar-detector
+spec:
+  predictor:
+    minReplicas: 2
+    maxReplicas: 10
+    scaleTarget: 70
+    containers:
+      - name: model-server
+        image: ${ECR_REPO}/solar-detector:${MODEL_VERSION}
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: 8Gi
+          requests:
+            memory: 4Gi
+        env:
+          - name: MODEL_NAME
+            value: solar-panel-detector
+```
+
+### 4. Drift Detection & Monitoring
+
+We implemented continuous monitoring for both **data drift** and **model drift**:
+
+```python
+from evidently import ColumnMapping
+from evidently.report import Report
+from evidently.metrics import DataDriftPreset, TargetDriftPreset
+
+def detect_drift(reference_data, current_data):
+    """Detect data and prediction drift"""
+    report = Report(metrics=[
+        DataDriftPreset(),
+        TargetDriftPreset()
+    ])
+
+    report.run(
+        reference_data=reference_data,
+        current_data=current_data,
+        column_mapping=column_mapping
+    )
+
+    drift_detected = report.as_dict()["metrics"][0]["result"]["dataset_drift"]
+
+    if drift_detected:
+        trigger_retraining_pipeline()
+        send_slack_alert("Data drift detected - retraining initiated")
+
+    return report
+```
+
+## Results & Impact
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Model deployment time | 2 weeks | 2 hours | **99% faster** |
+| Experiment tracking | Manual | Automated | **100% coverage** |
+| Model rollback time | 4 hours | 5 minutes | **98% faster** |
+| ML cycle time | 10 days | 1 day | **90% reduction** |
+
+## Key Learnings
+
+1. **Start with reproducibility**: Version everything - data, code, models, and configs
+2. **Automate early**: Manual steps become bottlenecks at scale
+3. **Monitor proactively**: Drift detection prevents silent model degradation
+4. **Design for failure**: Canary deployments and automatic rollbacks are essential
+
+## Tech Stack
+
+- **Training**: AWS SageMaker, PyTorch, TensorFlow
+- **Orchestration**: Apache Airflow, SageMaker Pipelines
+- **Experiment Tracking**: MLFlow
+- **Model Registry**: MLFlow Model Registry
+- **Serving**: Kubernetes (EKS), KServe
+- **Monitoring**: Prometheus, Grafana, Evidently
+- **Infrastructure**: Terraform, AWS CDK
+
+---
+
+This platform became the foundation for all ML workloads at Sensehawk, enabling data scientists to focus on what they do best—building models that solve real problems.

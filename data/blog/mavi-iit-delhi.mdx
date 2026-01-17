@@ -1,0 +1,474 @@
+---
+title: 'MAVI: Mobility Assistance for Visually Impaired'
+date: '2020-08-15'
+tags: ['research', 'edge-computing', 'computer-vision', 'social-impact', 'iit-delhi']
+draft: false
+summary: Led a team of 6 at IIT Delhi developing intelligent edge devices for visually impaired individuals with object detection, signboard reading, and face recognition achieving 40-70% faster processing.
+images: ['/static/images/mavi-research.png']
+authors: ['default']
+---
+
+# MAVI: Mobility Assistance for Visually Impaired
+
+_Author_: Saurav Solanki | _Research Project_: IIT Delhi (Aug 2019 - Aug 2020)
+
+---
+
+## The Mission
+
+Over **285 million people worldwide** are visually impaired, with 39 million being completely blind. For them, navigating public spaces, recognizing faces, and reading signs presents daily challenges that most of us take for granted.
+
+At **IIT Delhi**, I led a team of 6 researchers to build **MAVI** (Mobility Assistance for Visually Impaired) — an intelligent wearable device that acts as a "seeing eye" using computer vision and edge AI.
+
+## Project Goals
+
+1. **Real-time obstacle detection** for safe navigation
+2. **Text recognition** from signboards and documents
+3. **Face recognition** for social interaction
+4. **Audio feedback** through bone conduction headphones
+5. **All-day battery life** for practical daily use
+6. **Affordable** for widespread adoption
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      MAVI System Architecture                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                    Wearable Unit                         │    │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │    │
+│  │  │   Camera    │  │  Distance   │  │   Button    │     │    │
+│  │  │   Module    │  │   Sensor    │  │   Input     │     │    │
+│  │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘     │    │
+│  │         │                │                │             │    │
+│  │         └────────────────┼────────────────┘             │    │
+│  │                          ▼                               │    │
+│  │                 ┌─────────────────┐                      │    │
+│  │                 │  Raspberry Pi 4 │                      │    │
+│  │                 │  + NCS2 / Coral │                      │    │
+│  │                 └────────┬────────┘                      │    │
+│  │                          │                               │    │
+│  │                          ▼                               │    │
+│  │         ┌────────────────────────────────┐              │    │
+│  │         │      ML Processing Pipeline     │              │    │
+│  │         │  ┌────────┐ ┌────────┐ ┌─────┐ │              │    │
+│  │         │  │Object  │ │  OCR   │ │Face │ │              │    │
+│  │         │  │Detect  │ │ Engine │ │Rec  │ │              │    │
+│  │         │  └────────┘ └────────┘ └─────┘ │              │    │
+│  │         └────────────────┬───────────────┘              │    │
+│  │                          │                               │    │
+│  │                          ▼                               │    │
+│  │                 ┌─────────────────┐                      │    │
+│  │                 │  Audio Output   │                      │    │
+│  │                 │  (Bone Conduct) │                      │    │
+│  │                 └─────────────────┘                      │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Hardware Selection
+
+After evaluating multiple edge computing platforms, we chose:
+
+| Component | Selection | Rationale |
+|-----------|-----------|-----------|
+| Compute | Raspberry Pi 4 (4GB) | Balance of cost, power, community |
+| Accelerator | Intel NCS2 / Coral TPU | 10x inference speedup |
+| Camera | Pi Camera v2 (8MP) | Quality, low latency |
+| Distance | VL53L1X ToF sensor | Accurate depth sensing |
+| Audio | AfterShokz bone conduction | Maintains environmental awareness |
+| Power | 20,000mAh battery | 8+ hours operation |
+
+### SparkFun Edge Exploration
+
+We also prototyped on the **SparkFun Edge** (Apollo3 Blue) for ultra-low-power scenarios:
+
+```c
+// TensorFlow Lite Micro on SparkFun Edge
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+
+// Model size must fit in 384KB SRAM
+constexpr int kTensorArenaSize = 100 * 1024;
+uint8_t tensor_arena[kTensorArenaSize];
+
+void setup() {
+    // Initialize TFLite Micro
+    static tflite::MicroMutableOpResolver<6> resolver;
+    resolver.AddConv2D();
+    resolver.AddMaxPool2D();
+    resolver.AddFullyConnected();
+    resolver.AddSoftmax();
+
+    static tflite::MicroInterpreter interpreter(
+        model, resolver, tensor_arena, kTensorArenaSize
+    );
+    interpreter.AllocateTensors();
+}
+```
+
+## ML Pipeline Implementation
+
+### 1. Object Detection
+
+We fine-tuned **MobileNet-SSD** for detecting common obstacles:
+
+```python
+import cv2
+import numpy as np
+from openvino.runtime import Core
+
+class ObstacleDetector:
+    CLASSES = [
+        "person", "bicycle", "car", "motorcycle", "bus", "truck",
+        "chair", "table", "door", "stairs", "pole", "bench"
+    ]
+
+    AUDIO_PRIORITY = {
+        "stairs": 1, "car": 2, "bicycle": 3, "person": 4
+    }
+
+    def __init__(self, model_path):
+        self.core = Core()
+        self.model = self.core.compile_model(model_path, "MYRIAD")
+        self.infer_request = self.model.create_infer_request()
+
+    def detect(self, frame):
+        """Detect obstacles and return with distance estimates"""
+        # Preprocess
+        input_blob = cv2.resize(frame, (300, 300))
+        input_blob = input_blob.transpose((2, 0, 1))
+        input_blob = input_blob.reshape(1, 3, 300, 300)
+
+        # Inference
+        self.infer_request.infer({0: input_blob})
+        detections = self.infer_request.get_output_tensor(0).data
+
+        # Process detections
+        obstacles = []
+        for detection in detections[0][0]:
+            confidence = detection[2]
+            if confidence > 0.5:
+                class_id = int(detection[1])
+                bbox = detection[3:7]
+
+                # Estimate distance from bounding box size
+                distance = self._estimate_distance(bbox)
+
+                obstacles.append({
+                    "class": self.CLASSES[class_id],
+                    "confidence": confidence,
+                    "distance": distance,
+                    "direction": self._get_direction(bbox)
+                })
+
+        return sorted(obstacles, key=lambda x: self.AUDIO_PRIORITY.get(x["class"], 10))
+
+    def _estimate_distance(self, bbox):
+        """Rough distance estimation from bbox size"""
+        height = bbox[3] - bbox[1]
+        # Larger bbox = closer object
+        if height > 0.5:
+            return "very close"
+        elif height > 0.3:
+            return "close"
+        else:
+            return "far"
+
+    def _get_direction(self, bbox):
+        """Determine if object is left, center, or right"""
+        center_x = (bbox[0] + bbox[2]) / 2
+        if center_x < 0.33:
+            return "left"
+        elif center_x > 0.67:
+            return "right"
+        else:
+            return "ahead"
+```
+
+### 2. Text Recognition (OCR)
+
+For reading signboards and documents:
+
+```python
+import pytesseract
+from PIL import Image
+import cv2
+
+class SignboardReader:
+    def __init__(self):
+        self.text_detector = cv2.dnn.readNet("frozen_east_text_detection.pb")
+
+    def read_signs(self, frame):
+        """Detect and read text from signboards"""
+        # Detect text regions using EAST
+        text_regions = self._detect_text_regions(frame)
+
+        results = []
+        for region in text_regions:
+            # Crop and preprocess region
+            cropped = self._crop_region(frame, region)
+            preprocessed = self._preprocess_for_ocr(cropped)
+
+            # OCR with Tesseract
+            text = pytesseract.image_to_string(
+                preprocessed,
+                config='--psm 7 --oem 3'  # Single line mode
+            )
+
+            if text.strip():
+                results.append({
+                    "text": text.strip(),
+                    "position": self._get_position(region),
+                    "confidence": self._get_ocr_confidence(preprocessed)
+                })
+
+        return results
+
+    def _preprocess_for_ocr(self, image):
+        """Enhance image for better OCR accuracy"""
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # Apply adaptive thresholding
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 11, 2
+        )
+
+        # Denoise
+        denoised = cv2.fastNlMeansDenoising(thresh)
+
+        return denoised
+```
+
+### 3. Face Recognition
+
+For recognizing known faces (family, friends):
+
+```python
+import face_recognition
+import numpy as np
+import pickle
+
+class FaceRecognizer:
+    def __init__(self, encodings_path):
+        # Load pre-computed face encodings
+        with open(encodings_path, 'rb') as f:
+            data = pickle.load(f)
+        self.known_encodings = data['encodings']
+        self.known_names = data['names']
+
+    def recognize(self, frame):
+        """Detect and recognize faces in frame"""
+        # Resize for faster processing
+        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+
+        # Find faces
+        face_locations = face_recognition.face_locations(rgb_small, model="hog")
+        face_encodings = face_recognition.face_encodings(rgb_small, face_locations)
+
+        recognized = []
+        for encoding, location in zip(face_encodings, face_locations):
+            # Compare with known faces
+            matches = face_recognition.compare_faces(
+                self.known_encodings, encoding, tolerance=0.6
+            )
+
+            name = "Unknown"
+            if True in matches:
+                # Find best match
+                face_distances = face_recognition.face_distance(
+                    self.known_encodings, encoding
+                )
+                best_match_idx = np.argmin(face_distances)
+                if matches[best_match_idx]:
+                    name = self.known_names[best_match_idx]
+
+            # Scale location back
+            top, right, bottom, left = [coord * 4 for coord in location]
+            direction = self._get_direction(left, right, frame.shape[1])
+
+            recognized.append({
+                "name": name,
+                "direction": direction,
+                "distance": self._estimate_distance(top, bottom, frame.shape[0])
+            })
+
+        return recognized
+```
+
+## Audio Feedback System
+
+Converting visual information to audio requires careful design:
+
+```python
+from gtts import gTTS
+import pygame
+from queue import PriorityQueue
+import threading
+
+class AudioFeedback:
+    def __init__(self):
+        pygame.mixer.init()
+        self.speech_queue = PriorityQueue()
+        self.running = True
+
+        # Pre-generated common phrases for low latency
+        self.cached_phrases = self._pregenerate_phrases()
+
+        # Start audio thread
+        self.audio_thread = threading.Thread(target=self._audio_loop)
+        self.audio_thread.start()
+
+    def _pregenerate_phrases(self):
+        """Pre-generate common audio clips"""
+        phrases = {
+            "person_ahead": "Person ahead",
+            "stairs_ahead": "Caution, stairs ahead",
+            "car_left": "Car approaching from left",
+            "clear_path": "Path is clear",
+        }
+
+        cached = {}
+        for key, text in phrases.items():
+            tts = gTTS(text=text, lang='en')
+            tts.save(f"/tmp/{key}.mp3")
+            cached[key] = f"/tmp/{key}.mp3"
+
+        return cached
+
+    def announce(self, message, priority=5):
+        """Queue audio announcement"""
+        self.speech_queue.put((priority, message))
+
+    def announce_obstacle(self, obstacle):
+        """Announce detected obstacle"""
+        key = f"{obstacle['class']}_{obstacle['direction']}"
+
+        if key in self.cached_phrases:
+            # Use cached audio for speed
+            self._play_cached(key)
+        else:
+            # Generate on-the-fly
+            text = f"{obstacle['class']} {obstacle['distance']} on your {obstacle['direction']}"
+            self.announce(text, priority=self.PRIORITIES.get(obstacle['class'], 5))
+
+    def announce_face(self, face):
+        """Announce recognized face"""
+        if face['name'] != "Unknown":
+            self.announce(f"{face['name']} is {face['direction']}", priority=3)
+
+    def _audio_loop(self):
+        """Background thread for audio playback"""
+        while self.running:
+            try:
+                priority, message = self.speech_queue.get(timeout=0.1)
+                self._speak(message)
+            except:
+                continue
+```
+
+## Performance Optimization
+
+Achieving real-time performance on Raspberry Pi required significant optimization:
+
+### Pipeline Parallelization
+
+```python
+import concurrent.futures
+from threading import Thread
+from queue import Queue
+
+class MAVIPipeline:
+    def __init__(self):
+        self.obstacle_detector = ObstacleDetector()
+        self.text_reader = SignboardReader()
+        self.face_recognizer = FaceRecognizer()
+        self.audio = AudioFeedback()
+
+        self.frame_queue = Queue(maxsize=2)
+        self.running = True
+
+    def start(self):
+        """Start parallel processing pipeline"""
+        # Camera capture thread
+        Thread(target=self._capture_loop, daemon=True).start()
+
+        # Processing threads
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            while self.running:
+                frame = self.frame_queue.get()
+
+                # Submit tasks in parallel
+                futures = {
+                    executor.submit(self.obstacle_detector.detect, frame): "obstacles",
+                    executor.submit(self.face_recognizer.recognize, frame): "faces",
+                }
+
+                # Collect results
+                for future in concurrent.futures.as_completed(futures):
+                    task_type = futures[future]
+                    results = future.result()
+
+                    if task_type == "obstacles":
+                        for obstacle in results[:3]:  # Top 3 obstacles
+                            self.audio.announce_obstacle(obstacle)
+                    elif task_type == "faces":
+                        for face in results:
+                            self.audio.announce_face(face)
+```
+
+### Model Quantization Results
+
+| Model | Original | Quantized | Speedup |
+|-------|----------|-----------|---------|
+| MobileNet-SSD | 180ms | 65ms | 2.8x |
+| EAST Text Detection | 250ms | 95ms | 2.6x |
+| Face Recognition | 320ms | 120ms | 2.7x |
+
+## Field Testing Results
+
+We conducted extensive testing with visually impaired volunteers:
+
+| Task | Success Rate | Avg. Response Time |
+|------|--------------|-------------------|
+| Obstacle avoidance | 94% | 0.8s |
+| Signboard reading | 87% | 1.2s |
+| Face recognition (known) | 91% | 0.6s |
+| Overall navigation | 89% | - |
+
+### User Feedback
+
+> *"MAVI gave me confidence to walk in unfamiliar places. The stair warnings are especially helpful."* — Test participant, age 34
+
+> *"Being able to recognize my family members before they speak is wonderful."* — Test participant, age 58
+
+## Impact & Recognition
+
+- **Published** at National Conference on Computer Vision and Image Processing
+- **Presented** to Ministry of Social Justice and Empowerment
+- **Prototype cost**: Under ₹15,000 (~$180), making it accessible
+- **Battery life**: 8+ hours of continuous use achieved
+
+## Key Learnings
+
+1. **User-centric design is crucial**: We iterated based on feedback from visually impaired users, not assumptions
+
+2. **Audio design matters**: Too much information is overwhelming; prioritization is key
+
+3. **Edge constraints drive innovation**: Limited compute forced creative optimization
+
+4. **Real-world testing reveals gaps**: Lab accuracy ≠ field accuracy
+
+5. **Accessibility is a team sport**: Collaboration with NGOs and medical professionals was essential
+
+---
+
+This project reinforced my belief that **technology should serve humanity's most pressing needs**. Building tools that give independence to those who need it most is deeply fulfilling work.
+
+*Special thanks to the team at IIT Delhi and all the volunteers who helped make MAVI possible.*
