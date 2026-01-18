@@ -24,7 +24,7 @@ export default function Projects() {
           </p>
         </div>
         <div className="container py-12">
-          <div className="-m-4 flex flex-wrap">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {sortedProjects.map((d, index) => (
               <div
                 key={d.title}

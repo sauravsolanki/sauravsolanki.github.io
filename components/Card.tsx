@@ -1,4 +1,4 @@
-import Image from './Image'
+import NextImage from 'next/image'
 import Link from './Link'
 
 interface CardProps {
@@ -11,7 +11,7 @@ interface CardProps {
 }
 
 const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) => (
-  <div className="md max-w-[544px] p-4 md:w-1/2">
+  <div className="h-full">
     <div
       className={`${imgSrc && 'h-full'} group relative overflow-hidden rounded-md border-2
         ${highlight
@@ -32,24 +32,40 @@ const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) 
         (href ? (
           <Link href={href} aria-label={`Link to ${title}`}>
             <div className="overflow-hidden">
-              <Image
+              {imgSrc.endsWith('.svg') ? (
+                <img
+                  alt={title}
+                  src={imgSrc}
+                  className="w-full object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+                />
+              ) : (
+                <NextImage
+                  alt={title}
+                  src={imgSrc}
+                  className="object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+                  width={544}
+                  height={306}
+                />
+              )}
+            </div>
+          </Link>
+        ) : (
+          <div className="overflow-hidden">
+            {imgSrc.endsWith('.svg') ? (
+              <img
+                alt={title}
+                src={imgSrc}
+                className="w-full object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+              />
+            ) : (
+              <NextImage
                 alt={title}
                 src={imgSrc}
                 className="object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
                 width={544}
                 height={306}
               />
-            </div>
-          </Link>
-        ) : (
-          <div className="overflow-hidden">
-            <Image
-              alt={title}
-              src={imgSrc}
-              className="object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
-              width={544}
-              height={306}
-            />
+            )}
           </div>
         ))}
       <div className="p-6">

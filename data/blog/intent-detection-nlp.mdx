@@ -3,7 +3,7 @@ title: 'Intent Detection & Query AutoComplete at Scale'
 date: '2024-12-10'
 tags: ['nlp', 'gpt-2', 'transformers', 'production-ml', 'deep-learning']
 draft: false
-summary: Building real-time intent recognition achieving <500ms latency with 70% accuracy improvement, and implementing Query AutoComplete using Ghosting approach with N-gram models and fine-tuned GPT-2.
+summary: Building real-time intent recognition achieving sub-500ms latency with 70% accuracy improvement, and implementing Query AutoComplete using Ghosting approach with N-gram models and fine-tuned GPT-2.
 images: ['/static/images/intent-detection.png']
 authors: ['default']
 ---
@@ -130,7 +130,7 @@ class IntentClassifier:
 
 ### Latency Optimization
 
-Achieving **<500ms latency** required several optimizations:
+Achieving **\<500ms latency** required several optimizations:
 
 1. **Model Quantization**: INT8 quantization reduced inference time by 40%
 2. **ONNX Runtime**: Converted PyTorch models to ONNX for 2x speedup
@@ -266,7 +266,7 @@ model.resize_token_embeddings(len(tokenizer))
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | Intent accuracy | 45% | 76% | **+70%** |
-| Intent latency | 1.2s | 480ms | **<500ms achieved** |
+| Intent latency | 1.2s | 480ms | **\<500ms achieved** |
 | AutoComplete acceptance | 12% | 34% | **+183%** |
 | Query formulation time | 45s | 18s | **60% faster** |
 
