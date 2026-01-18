@@ -20,7 +20,8 @@ export default function Projects() {
             Projects
           </h1>
           <p className="text-lg leading-7 text-gray-500 dark:text-gray-400">
-            Production ML systems, research projects, and open-source contributions showcasing expertise in NLP, Computer Vision, MLOps, and Edge AI.
+            Production ML systems, research projects, and open-source contributions showcasing
+            expertise in NLP, Computer Vision, MLOps, and Edge AI.
           </p>
         </div>
         <div className="container py-12">

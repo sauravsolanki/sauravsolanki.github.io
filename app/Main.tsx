@@ -21,11 +21,17 @@ export default function Home({ posts }) {
         <h1 className="animate-fadeInUp text-4xl font-extrabold leading-tight tracking-tight text-gray-900 dark:text-gray-100 sm:text-5xl md:text-6xl">
           Senior ML Engineer
         </h1>
-        <p className="animate-fadeInUp text-xl leading-8 text-gray-600 dark:text-gray-300" style={{ animationDelay: '100ms' }}>
-          Building <span className="text-primary-500 font-semibold">production ML systems</span> at scale.
-          5+ years delivering NLP, Computer Vision, and MLOps solutions.
+        <p
+          className="animate-fadeInUp text-xl leading-8 text-gray-600 dark:text-gray-300"
+          style={{ animationDelay: '100ms' }}
+        >
+          Building <span className="font-semibold text-primary-500">production ML systems</span> at
+          scale. 5+ years delivering NLP, Computer Vision, and MLOps solutions.
         </p>
-        <div className="animate-fadeInUp flex flex-wrap gap-3 pt-4" style={{ animationDelay: '200ms' }}>
+        <div
+          className="animate-fadeInUp flex flex-wrap gap-3 pt-4"
+          style={{ animationDelay: '200ms' }}
+        >
           <Link
             href="/projects"
             className="rounded-lg bg-primary-500 px-6 py-3 font-medium text-white transition-all hover:bg-primary-600 hover:shadow-lg"
@@ -49,7 +55,7 @@ export default function Home({ posts }) {
             className="animate-fadeInUp group rounded-lg border border-gray-200 p-4 transition-all duration-300 hover:border-primary-500 hover:shadow-md dark:border-gray-700 dark:hover:border-primary-400"
             style={{ animationDelay: `${300 + index * 100}ms` }}
           >
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-primary-500 transition-colors">
+            <h3 className="font-semibold text-gray-900 transition-colors group-hover:text-primary-500 dark:text-gray-100">
               {item.name}
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.desc}</p>

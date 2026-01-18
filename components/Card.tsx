@@ -14,16 +14,17 @@ const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) 
   <div className="h-full">
     <div
       className={`${imgSrc && 'h-full'} group relative overflow-hidden rounded-md border-2
-        ${highlight
-          ? 'border-primary-500 dark:border-primary-400 shadow-lg shadow-primary-500/20'
-          : 'border-gray-200 border-opacity-60 dark:border-gray-700'
+        ${
+          highlight
+            ? 'border-primary-500 shadow-lg shadow-primary-500/20 dark:border-primary-400'
+            : 'border-gray-200 border-opacity-60 dark:border-gray-700'
         }
-        transition-all duration-300 ease-in-out hover:scale-[1.02] hover:shadow-xl
-        hover:border-primary-500 dark:hover:border-primary-400`}
+        transition-all duration-300 ease-in-out hover:scale-[1.02] hover:border-primary-500
+        hover:shadow-xl dark:hover:border-primary-400`}
     >
       {highlight && (
-        <div className="absolute top-0 right-0 z-10">
-          <div className="animate-pulse bg-gradient-to-r from-primary-500 to-pink-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
+        <div className="absolute right-0 top-0 z-10">
+          <div className="animate-pulse rounded-bl-lg bg-gradient-to-r from-primary-500 to-pink-600 px-3 py-1 text-xs font-bold text-white">
             Featured
           </div>
         </div>
@@ -36,13 +37,13 @@ const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) 
                 <img
                   alt={title}
                   src={imgSrc}
-                  className="w-full object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+                  className="w-full object-cover object-center transition-transform duration-500 group-hover:scale-110 md:h-36 lg:h-48"
                 />
               ) : (
                 <NextImage
                   alt={title}
                   src={imgSrc}
-                  className="object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+                  className="object-cover object-center transition-transform duration-500 group-hover:scale-110 md:h-36 lg:h-48"
                   width={544}
                   height={306}
                 />
@@ -55,13 +56,13 @@ const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) 
               <img
                 alt={title}
                 src={imgSrc}
-                className="w-full object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+                className="w-full object-cover object-center transition-transform duration-500 group-hover:scale-110 md:h-36 lg:h-48"
               />
             ) : (
               <NextImage
                 alt={title}
                 src={imgSrc}
-                className="object-cover object-center md:h-36 lg:h-48 transition-transform duration-500 group-hover:scale-110"
+                className="object-cover object-center transition-transform duration-500 group-hover:scale-110 md:h-36 lg:h-48"
                 width={544}
                 height={306}
               />
@@ -74,16 +75,16 @@ const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) 
             {tags.map((tag) => (
               <span
                 key={tag}
-                className="inline-block rounded-full bg-gradient-to-r from-primary-500/10 to-pink-500/10
-                  px-3 py-1 text-xs font-medium text-primary-600 dark:text-primary-400
-                  border border-primary-500/20 transition-all duration-200 hover:bg-primary-500/20"
+                className="inline-block rounded-full border border-primary-500/20 bg-gradient-to-r
+                  from-primary-500/10 to-pink-500/10 px-3 py-1 text-xs font-medium
+                  text-primary-600 transition-all duration-200 hover:bg-primary-500/20 dark:text-primary-400"
               >
                 {tag}
               </span>
             ))}
           </div>
         )}
-        <h2 className="mb-3 text-2xl font-bold leading-8 tracking-tight group-hover:text-primary-500 transition-colors duration-200">
+        <h2 className="mb-3 text-2xl font-bold leading-8 tracking-tight transition-colors duration-200 group-hover:text-primary-500">
           {href ? (
             <Link href={href} aria-label={`Link to ${title}`}>
               {title}
@@ -97,13 +98,23 @@ const Card = ({ title, description, imgSrc, href, tags, highlight }: CardProps) 
           <Link
             href={href}
             className="inline-flex items-center text-base font-medium leading-6 text-primary-500
-              hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-200
-              group-hover:translate-x-1"
+              transition-all duration-200 hover:text-primary-600 group-hover:translate-x-1
+              dark:hover:text-primary-400"
             aria-label={`Link to ${title}`}
           >
             Learn more
-            <svg className="ml-1 w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            <svg
+              className="ml-1 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 7l5 5m0 0l-5 5m5-5H6"
+              />
             </svg>
           </Link>
         )}
